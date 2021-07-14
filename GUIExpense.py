@@ -7,7 +7,18 @@ from datetime import datetime
 
 GUI = Tk()
 GUI.title('โปรแกรมบันทึกค่าใช้จ่าย v.1.0 by Uncle Engineer')
-GUI.geometry('600x700+500+50')
+#GUI.geometry('9000x700+500+50')
+
+w = 720
+h = 700
+
+ws = GUI.winfo_screenmmwidth()
+hs = GUI.winfo_screenheight()
+
+x = (ws*1.5) - (w/2) # ที่เป็น *1.5 เพราะว่าจอ macmini มีการ scale
+y = (hs/2) - (h/2)
+
+GUI.geometry(f'{w}x{h}+{x:.0f}+{y:.0f}') #(ความกว้างโปรแกรม,ความสูงโปรแกรม,จุดเริ่มต้นแกนx,จุดเริ่มตนแกน y :.0f คือไม่เอาทศนิยม)
 
 # B1 = Button(GUI,text='Hello')
 # B1.pack(ipadx=50,ipady=20) #.pack() ติดปุ่มเข้ากับ GUI หลัก
@@ -95,14 +106,16 @@ def Save(event=None):
 		# บันทึกข้อมูลลง csv อย่าลืม import csv ด้วย
 		today = datetime.now().strftime('%a') # days['Mon'] = 'จันทร์'
 		print(today)
+		stamp = datetime.now()
 		dt = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+		transactionid = stamp.strftime('%Y%m%d%H%M%f')
 		dt = days[today] + '-' + dt
-		with open('savedata2.csv','a',encoding='utf-8',newline='') as f:
+		with open('savedata.csv','a',encoding='utf-8',newline='') as f:
 			# with คือสั่งเปิดไฟล์แล้วปิดอัตโนมัติ
 			# 'a' การบันทึกเรื่อยๆ เพิ่มข้อมูลต่อจากข้อมูลเก่า
 			# newline='' ทำให้ข้อมูลไม่มีบรรทัดว่าง
 			fw = csv.writer(f) #สร้างฟังชั่นสำหรับเขียนข้อมูล
-			data = [dt,expense,price,quantity,total]
+			data = [transactionid,dt,expense,price,quantity,total]
 			fw.writerow(data)
 
 		# ทำให้เคอเซอร์กลับไปตำแหน่งช่องกรอก E1
@@ -180,7 +193,7 @@ def read_csv():
 
 L = ttk.Label(T2,text='ตารางแสดงผลลัพท์ทั้งหมด',font=FONT1).pack(pady=20)
 
-header = ['วัน-เวลา','รายการ','ค่าใช้จ่าย','จำนวน','รวม']
+header = ['รหัสรายการ','วัน-เวลา','รายการ','ค่าใช้จ่าย','จำนวน','รวม']
 resulttable = ttk.Treeview(T2,columns=header,show='headings',height=20)
 resulttable.pack()
 
@@ -190,20 +203,147 @@ resulttable.pack()
 for h in header:
 	resulttable.heading(h,text=h)
 
-headerwidth = [150,170,80,80,80]
+headerwidth = [150,150,170,80,80,80]
 for h,w in zip(header,headerwidth):
 	resulttable.column(h,width=w)
 
 # resulttable.insert('',0,value=['จันทร์','น้ำดื่ม',30,5,150])
 # resulttable.insert('','end',value=['อังคาร','น้ำดื่ม',30,5,150])
 
+def DeleteRecord(event=None):
+	check = messagebox.askyesno('Confirm?','คุณต้องการลบข้อมูลใช่หรือไม่')
+	print('YES/NO',check)
+	if check == True:
+		print('delete')
+		select = resulttable.selection()
+		#print(select)
+		data = resulttable.item(select)
+		data = data['values'][0]
+		transactionid = data
+		#print(transactionid)
+		del alltransaction[str(transactionid)]
+		#print(alltransaction)
+		UpdateCSV()
+		update_table()
+	else:
+		print('cancle deleting')
+BDelete = ttk.Button(T2,text='delete',command=DeleteRecord)
+BDelete.place(x=50,y=500)
+
+resulttable.bind('<Delete>',DeleteRecord)
+
+alltransaction = {}
+
+def UpdateCSV():
+	with open('savedata.csv','w',newline='',encoding='utf-8') as f:
+		fw = csv.writer(f)
+		#เตรียมข้อมูลให้กลายเป็น list
+		data = list(alltransaction.values()) #.values return only value ของ dict
+		fw.writerows(data) #writerows -> row's' คือ write multiple lines from nested list
+		print('Table updated')
+
 def update_table():
 	resulttable.delete(*resulttable.get_children())
 	# for c in resulttable.get_children():
 	# 	resulttable.delete(c)
-	data = read_csv()
-	for d in data:
-		resulttable.insert('',0,value=d)
+	try:
+		data = read_csv()
+		for d in data:
+			#create transaction data
+			alltransaction[d[0]] = d
+			resulttable.insert('',0,value=d)
+		print(alltransaction)
+	except Exception as e:
+		print('Error = {}'.format(e))
+
+### right click menu
+
+def EditRecord():
+	POPUP = Toplevel() #คล้ายกับ Tk() แต่ Tk() คือหน้าหลักหน้าแรกหน้าเดียวเท่านั้น ถ้าจะมีหน้าอื่นๆเช่นป้อปอัพหลังจากนี้ จะต้องเป็นคลาส toplevel
+	#POPUP.geometry('500x400')
+
+	w = 500
+	h = 400
+
+	ws = POPUP.winfo_screenmmwidth()
+	hs = POPUP.winfo_screenheight()
+
+	x = (ws*1.5) - (w/2) # ที่เป็น *1.5 เพราะว่าจอ macmini มีการ scale
+	y = (hs/2) - (h/2)
+
+	POPUP.geometry(f'{w}x{h}+{x:.0f}+{y:.0f}') #(ความกว้างโปรแกรม,ความสูงโปรแกรม,จุดเริ่มต้นแกนx,จุดเริ่มตนแกน y :.0f คือไม่เอาทศนิยม)
+
+
+	POPUP.title('Edit Record')
+	#------text1--------
+	L = ttk.Label(POPUP,text='รายการค่าใช้จ่าย',font=FONT1).pack()
+	v_expense = StringVar()
+	# StringVar() คือ ตัวแปรพิเศษสำหรับเก็บข้อมูลใน GUI
+	E1 = ttk.Entry(POPUP,textvariable=v_expense,font=FONT1)
+	E1.pack()
+	#-------------------
+
+	#------text2--------
+	L = ttk.Label(POPUP,text='ราคา (บาท)',font=FONT1).pack()
+	v_price = StringVar()
+	# StringVar() คือ ตัวแปรพิเศษสำหรับเก็บข้อมูลใน GUI
+	E2 = ttk.Entry(POPUP,textvariable=v_price,font=FONT1)
+	E2.pack()
+	#-------------------
+
+	#------text3--------
+	L = ttk.Label(POPUP,text='จำนวน (ชิ้น)',font=FONT1).pack()
+	v_quantity = StringVar()
+	# StringVar() คือ ตัวแปรพิเศษสำหรับเก็บข้อมูลใน GUI
+	E3 = ttk.Entry(POPUP,textvariable=v_quantity,font=FONT1)
+	E3.pack()
+	#-------------------
+
+	def Edit():
+		#print(transactionid)
+		#print(alltransaction)
+		olddata = alltransaction[str(transactionid)]
+		print(olddata)
+		v1 = v_expense.get()
+		v2 = float(v_price.get())
+		v3 = float(v_quantity.get())
+		total = v2*v3
+		newdata = [olddata[0],olddata[1],v1,v2,v3,total]
+		alltransaction[str(transactionid)]=newdata
+		UpdateCSV()
+		update_table()
+		POPUP.destroy()
+
+
+	icon_b1 = PhotoImage(file='b_save.png')
+
+	B2 = ttk.Button(POPUP,text=f'{"Save Edited": >{10}}',image=icon_b1,compound='left',command=Edit)
+	B2.pack(ipadx=50,ipady=20,pady=20)
+
+	#get data in selected record
+	select = resulttable.selection()
+	print(select)
+	data = resulttable.item(select)
+	data = data['values']
+	print(data)
+	transactionid = data[0]
+	#สั่งเซ็ทค่าเก่าไว้ตรงกล่องข้อความของ popup
+	v_expense.set(data[2])
+	v_price.set(data[3])
+	v_quantity.set(data[4])
+
+	POPUP.mainloop()
+
+rightclick =  Menu(GUI,tearoff=0)
+rightclick.add_command(label='Edit',command=EditRecord)
+rightclick.add_command(label='Delete',command=DeleteRecord)
+
+def menupopup(event):
+	#print(event.x_root, event.y_root)
+	rightclick.post(event.x_root, event.y_root)
+
+resulttable.bind('<Button-2>',menupopup) #<Button-2> คือเมาส์ปุ่มขวาของ mac และ bind คลิกขวาแค่กับ resulttable
+
 
 update_table()
 print('GET CHILD:',resulttable.get_children())

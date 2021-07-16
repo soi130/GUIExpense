@@ -3,13 +3,62 @@ from tkinter import *
 from tkinter import ttk, messagebox
 import csv
 from datetime import datetime
+####database####
+import sqlite3
+
+#create DB
+conn = sqlite3.connect('expense.sqlite3')
+
+#create curser
+c = conn.cursor()
+
+#create table
+c.execute("""CREATE TABLE IF NOT EXISTS expenselist (
+                ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                transactionid TEXT,
+                datetime TEXT,
+                title TEXT,
+                expense REAL,
+                quantity INTEGER,
+                total REAL
+            ) """)
+
+def insert_expense(transactionid,datetime,title,expense,quantity,total): #C Create in CRUD
+    ID = None
+    with conn: 
+        c.execute("""INSERT INTO expenselist VALUES (?,?,?,?,?,?,?)""",
+        (ID,transactionid,datetime,title,expense,quantity,total))
+    conn.commit() #commit (save) data into the DB
+    print('Insert Success!')
+
+def show_expense(): #R Read in CRUD
+    with conn:
+        c.execute("SELECT * FROM expenselist")
+        expense = c.fetchall()
+        #print(expense)
+    return expense
+
+def update_expense(transactionid,title,expense,quantity,total): #U Update in CRUD
+    with conn:
+        c.execute("""UPDATE expenselist SET title = ?, expense = ?, quantity = ?, total=? WHERE transactionid = ?""",
+        ([title,expense,quantity,total,transactionid]))
+    conn.commit()
+    #print('Data Updated')
+
+def delete_expense(transationid): #D Delete in CRUD
+    with conn:
+        c.execute("DELETE FROM expenselist WHERE transactionid=?",([transationid]))
+        conn.commit()
+        #print('Data Deleted')
+
+########
 # ttk is theme of Tk
 
 GUI = Tk()
 GUI.title('โปรแกรมบันทึกค่าใช้จ่าย v.1.0 by Uncle Engineer')
 #GUI.geometry('9000x700+500+50')
 
-w = 720
+w = 800
 h = 700
 
 ws = GUI.winfo_screenmmwidth()
@@ -34,7 +83,7 @@ filemenu.add_command(label='Import CSV')
 filemenu.add_command(label='Export to Googlesheet')
 # Help
 def About():
-	print('About Menu')
+	#print('About Menu')
 	messagebox.showinfo('About','สวัสดีครับ โปรแกรมนี้คือโปรแกรมบันทึกข้อมูล\nสนใจบริจาคเราไหม? ขอ 1 BTC ก็พอแล้ว\nBTC Address: abc')
 
 
@@ -80,7 +129,7 @@ def Save(event=None):
 	quantity = v_quantity.get()
 
 	if expense == '':
-		print('No Data')
+		#print('No Data')
 		messagebox.showwarning('Error','กรุณากรอกข้อมูลค่าใช้จ่าย')
 		return
 	elif price == '':
@@ -93,8 +142,8 @@ def Save(event=None):
 	try:
 		total = float(price) * float(quantity)
 		# .get() คือดึงค่ามาจาก v_expense = StringVar()
-		print('รายการ: {} ราคา: {}'.format(expense,price))
-		print('จำนวน: {} รวมทั้งหมด: {} บาท'.format(quantity,total))
+		# print('รายการ: {} ราคา: {}'.format(expense,price))
+		# print('จำนวน: {} รวมทั้งหมด: {} บาท'.format(quantity,total))
 		text = 'รายการ: {} ราคา: {}\n'.format(expense,price)
 		text = text + 'จำนวน: {} รวมทั้งหมด: {} บาท'.format(quantity,total)
 		v_result.set(text)
@@ -105,11 +154,14 @@ def Save(event=None):
 
 		# บันทึกข้อมูลลง csv อย่าลืม import csv ด้วย
 		today = datetime.now().strftime('%a') # days['Mon'] = 'จันทร์'
-		print(today)
+		# print(today)
 		stamp = datetime.now()
 		dt = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 		transactionid = stamp.strftime('%Y%m%d%H%M%f')
 		dt = days[today] + '-' + dt
+
+		insert_expense(transactionid,dt,expense,float(price),int(quantity),total)
+
 		with open('savedata.csv','a',encoding='utf-8',newline='') as f:
 			# with คือสั่งเปิดไฟล์แล้วปิดอัตโนมัติ
 			# 'a' การบันทึกเรื่อยๆ เพิ่มข้อมูลต่อจากข้อมูลเก่า
@@ -212,9 +264,9 @@ for h,w in zip(header,headerwidth):
 
 def DeleteRecord(event=None):
 	check = messagebox.askyesno('Confirm?','คุณต้องการลบข้อมูลใช่หรือไม่')
-	print('YES/NO',check)
+	#print('YES/NO',check)
 	if check == True:
-		print('delete')
+		#print('delete')
 		select = resulttable.selection()
 		#print(select)
 		data = resulttable.item(select)
@@ -223,10 +275,12 @@ def DeleteRecord(event=None):
 		#print(transactionid)
 		del alltransaction[str(transactionid)]
 		#print(alltransaction)
-		UpdateCSV()
+		#UpdateCSV()
+		delete_expense(str(transactionid)) #delete in SQL DB
 		update_table()
 	else:
-		print('cancle deleting')
+		# print('cancle deleting')
+		pass
 BDelete = ttk.Button(T2,text='delete',command=DeleteRecord)
 BDelete.place(x=50,y=500)
 
@@ -242,17 +296,25 @@ def UpdateCSV():
 		fw.writerows(data) #writerows -> row's' คือ write multiple lines from nested list
 		print('Table updated')
 
+def UpdateSQL():
+	data = list(alltransaction.values()) #.values return only value ของ dict
+	#print('UpdateSQL ',data[0])
+	for d in data:
+		#(transactionid,title,expense,quantity,total)
+		update_expense(d[0],d[2],d[3],d[4],d[5])
+
+
 def update_table():
 	resulttable.delete(*resulttable.get_children())
 	# for c in resulttable.get_children():
 	# 	resulttable.delete(c)
 	try:
-		data = read_csv()
+		data = show_expense()  #read_csv() 
 		for d in data:
 			#create transaction data
-			alltransaction[d[0]] = d
-			resulttable.insert('',0,value=d)
-		print(alltransaction)
+			alltransaction[d[1]] = d[1:]
+			resulttable.insert('',0,value=d[1:])
+		#print('TS: ', alltransaction)
 	except Exception as e:
 		print('Error = {}'.format(e))
 
@@ -284,7 +346,7 @@ def EditRecord():
 	#-------------------
 
 	#------text2--------
-	L = ttk.Label(POPUP,text='ราคา (บาท)',font=FONT1).pack()
+	L = ttk.Label(POPUP,text='ราคา (บาท)',font=FONT1).pack() 
 	v_price = StringVar()
 	# StringVar() คือ ตัวแปรพิเศษสำหรับเก็บข้อมูลใน GUI
 	E2 = ttk.Entry(POPUP,textvariable=v_price,font=FONT1)
@@ -303,14 +365,16 @@ def EditRecord():
 		#print(transactionid)
 		#print(alltransaction)
 		olddata = alltransaction[str(transactionid)]
-		print(olddata)
+		# print(olddata)
 		v1 = v_expense.get()
 		v2 = float(v_price.get())
 		v3 = float(v_quantity.get())
 		total = v2*v3
 		newdata = [olddata[0],olddata[1],v1,v2,v3,total]
 		alltransaction[str(transactionid)]=newdata
-		UpdateCSV()
+		#UpdateCSV()
+		UpdateSQL()
+		#update_expense(olddata[0],olddata[1],v1,v2,v3,total) in case just want to update only one transaction at a time
 		update_table()
 		POPUP.destroy()
 
@@ -322,10 +386,10 @@ def EditRecord():
 
 	#get data in selected record
 	select = resulttable.selection()
-	print(select)
+	# print(select)
 	data = resulttable.item(select)
 	data = data['values']
-	print(data)
+	# print(data)
 	transactionid = data[0]
 	#สั่งเซ็ทค่าเก่าไว้ตรงกล่องข้อความของ popup
 	v_expense.set(data[2])
@@ -346,6 +410,6 @@ resulttable.bind('<Button-2>',menupopup) #<Button-2> คือเมาส์ป
 
 
 update_table()
-print('GET CHILD:',resulttable.get_children())
+# print('GET CHILD:',resulttable.get_children())
 GUI.bind('<Tab>',lambda x: E2.focus())
 GUI.mainloop()
